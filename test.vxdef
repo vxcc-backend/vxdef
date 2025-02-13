@@ -14,7 +14,7 @@ virt class Slot(
 virt class Register(
     string name,
     [SizedRegister] variants
-) : Slot(variants.*.bitsWidth)
+) : Slot(each variants: $.bitsWidth)
 
 virt class Flag(
     string name,

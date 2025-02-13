@@ -44,6 +44,7 @@ let tokenize-string(file-path: String, text: String): List<CString> = (
       "*".. rest => (tokens = cons(text[:"*".length], tokens); text = rest;);
       "/".. rest => (tokens = cons(text[:"/".length], tokens); text = rest;);
       "%".. rest => (tokens = cons(text[:"%".length], tokens); text = rest;);
+      "$".. rest => (tokens = cons(text[:"%".length], tokens); text = rest;);
       "&".. rest => (tokens = cons(text[:"&".length], tokens); text = rest;);
       "|".. rest => (tokens = cons(text[:"|".length], tokens); text = rest;);
       "!".. rest => (tokens = cons(text[:"!".length], tokens); text = rest;);

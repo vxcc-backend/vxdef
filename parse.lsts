@@ -142,6 +142,38 @@ let parse-expr-atom(file-path: String, toks: List<CString>): Tuple<List<CString>
             NullExpr {}
         );
 
+        "$" => (
+            toks = tail(toks);
+            CurrElemRefExpr {}
+        );
+
+        "each" => (
+            toks = tail(toks);
+
+            let arr = parse-expr(file-path, toks);
+            toks = arr.first;
+
+            expect(file-path, head(toks), ":");
+            toks = tail(toks);
+
+            let do = parse-expr(file-path, toks);
+            toks = do.first;
+
+            EachExpr { close(arr.second), close(do.second) }
+        );
+
+        "(" => (
+            toks = tail(toks);
+
+            let inner = parse-expr(file-path, toks);
+            toks = inner.first;
+
+            expect(file-path, head(toks), ")");
+            toks = tail(toks);
+
+            inner.second
+        );
+
         "[" => (
             toks = tail(toks);
 
