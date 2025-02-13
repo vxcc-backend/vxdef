@@ -9,6 +9,8 @@ lm --c -o vxdef.c vxdef/index-index.lsts
 cc vxdef.c -o vxdef.exe
 ```
 
+Depends on https://github.com/andrew-johnson-4/lambda-mountain/pull/1250 to merged
+
 Currently broken and WIP
 
 For examples see test.vxdef and ops.vxdef

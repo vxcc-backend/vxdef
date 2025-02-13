@@ -1,0 +1,101 @@
+
+# TODO: remove when substring weirdness is fixed in stdlib
+
+let .copy-len(self: CString, len: U64): CString = (
+    let buf = malloc(len + 1) as U8[];
+    buf[len] = 0_u8;
+    let i = 0_u64;
+    while i < len {
+        buf[i] = self[i];
+        i = i + 1;
+    };
+
+    buf as CString
+);
+
+# TODO: replace with generic split once merged
+
+let path-parse(p: CString): Vector<CString> = (
+    let res = mk-vector(type(CString), 8);
+
+    let loop = true;
+    while loop {
+        match p.find-first("/"[0_u64]) {
+            Some {i=content} => (
+                res = res.push(p.copy-len(i));
+                p = p.substring(i+1);
+            );
+
+            None {} => (
+                loop = false;
+            );
+        };
+    };
+
+    if p.length() > 0 {
+        res = res.push(p.copy-len(p.length()));
+    };
+
+    res
+);
+
+# TODO: pr path functions into stdlbi
+
+let path-fix-rel(path: Vector<CString>): Vector<CString> = (
+    let out = mk-vector(type(CString), path.length());
+
+    for x in path.unsafe-iter() {
+        match x {
+            "." => ();
+
+            ".." => (
+                if out.length() > 0 {
+                    out = out.pop().first;
+                } else {
+                    out = out.push(untern(".."));
+                };
+            );
+
+            seg => (
+                out = out.push(seg);
+            );
+        };
+    };
+
+    out
+);
+
+# if rel is absolute, returns rel instead
+let path-rel(base: Vector<CString>, rel: Vector<CString>): Vector<CString> = (
+    if rel[0] == "" {
+        rel
+    } else {
+        path-fix-rel((base + rel) :: Vector<CString>)
+    }
+);
+
+# TODO: replace with sublist when stdlib better
+let dirname(path: Vector<CString>): Vector<CString> = (
+    let new-len = path.length() - 1;
+    let out = mk-vector(type(CString), new-len);
+    let i = 0_u64;
+    while i < new-len {
+        out = out.push(path[i]);
+        i = i + 1;
+    };
+    out
+);
+
+let to-smart-string(path: Vector<CString>): String = (
+    let s = "";
+    let first = true;
+    for l in path.unsafe-iter() {
+        if first {
+            first = false;
+        } else {
+            s = s + "/";
+        };
+        s = s + to-smart-string(l);
+    };
+    s
+);

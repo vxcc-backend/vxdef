@@ -6,12 +6,12 @@ let empty-ident(): Ident = (
 let parse-ident(toks: List<CString>): Tuple<List<CString>, Ident> = (
     let out = mk-vector(type(CString), 4);
 
-    out.push(head(toks));
+    out = out.push(head(toks));
     toks = tail(toks);
 
     while head(toks) == "::" {
         toks = tail(toks);
-        out.push(head(toks));
+        out = out.push(head(toks));
         toks = tail(toks);
     };
 
@@ -101,7 +101,7 @@ let parse-members(file-path: String, toks: List<CString>): Tuple<List<CString>, 
         } else {
             let ms = parse-member-spec(file-path, toks);
             toks = ms.first;
-            out.push(close(ms.second));
+            out = out.push(close(ms.second));
 
             if head(toks) != "," {
                 loop = false;
@@ -154,7 +154,7 @@ let parse-expr-atom(file-path: String, toks: List<CString>): Tuple<List<CString>
                 } else {
                     let ex = parse-expr(file-path, toks);
                     toks = ex.first;
-                    arr.push(close(ex.second));
+                    arr = arr.push(close(ex.second));
 
                     if head(toks) != "," {
                         loop = false;
@@ -222,7 +222,7 @@ let parse-expr(file-path: String, toks: List<CString>): Tuple<List<CString>, Exp
         };
     };
 
-    val
+    Tuple { toks, val }
 );
 
 let empty-arglist(): ArgList = (
@@ -262,7 +262,7 @@ let parse-call-args(file-path: String, toks: List<CString>): Tuple<List<CString>
 
                 let e = parse-expr(file-path, toks);
                 toks = e.first;
-                out.positional.push(close(e.second));
+                out.positional = out.positional.push(close(e.second));
             };
 
             if head(toks) != "," {
@@ -279,7 +279,74 @@ let parse-call-args(file-path: String, toks: List<CString>): Tuple<List<CString>
     Tuple { toks, out }
 );
 
+# parses: Op + AwesomeOp + NiceOp
+let parse-combine-classes(file-path: String, toks: List<CString>): Tuple<List<CString>, Vector<Vector<CString>>> = (
+    let out = mk-vector(type(Vector<CString>), 2);
+
+    let loop = true;
+    while loop {
+        let i = parse-ident(toks);
+        toks = i.first;
+        out = out.push(i.second);
+
+        if head(toks) == "+" {
+            toks = tail(toks);
+        } else {
+            loop = false;
+        };
+    };
+
+    Tuple { toks, out }
+);
+
+# parses: (HUMAN(true),ROBOT(false))
+let parse-enum-members(file-path: String, toks: List<CString>): Tuple<List<CString>, HashtableEq<CString, ArgList[]>> = (
+    let out = HashtableEqEOF :: HashtableEq<CString, ArgList[]>;
+
+    expect(file-path, head(toks), "(");
+    toks = tail(toks);
+
+    let loop = true;
+    while loop {
+        if head(toks) == ")" {
+            loop = false;
+        } else {
+            let name = head(toks);
+            toks = tail(toks);
+
+            let x = parse-call-args(file-path, toks);
+            toks = x.first;
+
+            let args = close(x.second);
+            out[name] = args;
+
+            if head(toks) != "," {
+                loop = false;
+            } else {
+                toks = tail(toks);
+            };
+        };
+    };
+
+    expect(file-path, head(toks), ")");
+    toks = tail(toks);
+
+    Tuple { toks, out }
+);
+
+let str-tok-inner(tok: CString): String = (
+    match intern(tok) {
+        "\"" ..v .."\"" => (v);
+
+        rest => (
+            fail("Expected string token");
+        );
+    }
+);
+
 let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, toks: List<CString>): Vector<Decl> = (
+    let split-file-path = path-parse(untern(file-path));
+
     let out = mk-vector(type(Decl), 32);
 
     let pfx_virt = false :: U32;
@@ -309,6 +376,34 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 toks = tail(toks);
                 expect(file-path, head(toks), "]");
                 toks = tail(toks);
+            );
+
+            "include" => (
+                toks = tail(toks);
+
+                let stri = str-tok-inner(head(toks));
+                toks = tail(toks);
+
+                let include-path = path-rel(split-file-path, path-parse(untern(stri)));
+                let decls = parse-file(to-smart-string(include-path), scope, false, true);
+
+                for decl in decls.unsafe-iter() {
+                    out = out.push(decl);
+                };
+            );
+
+            "include_ref" => (
+                toks = tail(toks);
+
+                let stri = str-tok-inner(head(toks));
+                toks = tail(toks);
+
+                let include-path = path-rel(split-file-path, path-parse(untern(stri)));
+                let decls = parse-file(to-smart-string(include-path), scope, true, true);
+
+                for decl in decls.unsafe-iter() {
+                    out = out.push(decl);
+                };
             );
 
             "included_only" => (
@@ -368,27 +463,111 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 toks = m.first;
                 let members = m.second;
 
-                let parent = None :: Maybe<Tuple<Ident, ArgList[]>>;
-                if head(toks) == ":" {
+                let decl = if pfx_extension {
+                    if pfx_virt {
+                        fail("You can't have a \"virt extension\" (In file \{file-path})");
+                    };
+
+                    if pfx_extensible {
+                        fail("You can't have a \"extensible extension\" LOL (In file \{file-path})");
+                    };
+
+                    expect(file-path, head(toks), ":");
                     toks = tail(toks);
 
                     let pi = parse-ident(toks);
                     toks = pi.first;
 
-                    let a = parse-call-args(file-path, toks);
-                    toks = a.first;
+                    ClassExtDecl {
+                        members,
+                        pi.second
+                    }
+                } else {
+                    let parent = None :: Maybe<Tuple<Ident, ArgList[]>>;
+                    if head(toks) == ":" {
+                        toks = tail(toks);
 
-                    parent = Some { Tuple { pi.second, close(a.second) } };
+                        let pi = parse-ident(toks);
+                        toks = pi.first;
+
+                        let a = parse-call-args(file-path, toks);
+                        toks = a.first;
+
+                        parent = Some { Tuple { pi.second, close(a.second) } };
+                    };
+
+                    ClassDecl {
+                        pfx_virt as U8,
+                        pfx_extensible as U8,
+                        members,
+                        parent
+                    }
                 };
 
-                let decl = ClassDecl {
-                    pfx_virt as U8,
-                    pfx_extensible as U8,
-                    members,
-                    parent
+                out = out.push(Decl {
+                    name,
+                    attribs,
+                    is_ref,
+                    decl
+                });
+
+                pfx_virt = false;
+                pfx_extensible = false;
+                pfx_extension = false;
+                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+            );
+
+            "enum" => (
+                toks = tail(toks);
+
+                let i = parse-ident(toks);
+                toks = i.first;
+                let name = ((scope :: Ident) + (i.second :: Ident)) :: Ident;
+
+                let m = parse-enum-members(file-path, toks);
+                toks = m.first;
+                let members = m.second;
+
+                if pfx_virt {
+                    fail("You can't have a \"virt enum\" (In file \{file-path})");
                 };
 
-                out.push(Decl {
+                let decl = if pfx_extension {
+                    if pfx_extensible {
+                        fail("You can't have a \"extensible extension\" LOL (In file \{file-path})");
+                    };
+
+                    expect(file-path, head(toks), ":");
+                    toks = tail(toks);
+
+                    let pi = parse-ident(toks);
+                    toks = pi.first;
+
+                    expect(file-path, head(toks), ":");
+                    toks = tail(toks);
+
+                    let ci = parse-combine-classes(file-path, toks);
+                    toks = ci.first;
+
+                    EnumExtDecl {
+                        members,
+                        pi.second,
+                        ci.second
+                    }
+                } else {
+                    expect(file-path, head(toks), ":");
+                    toks = tail(toks);
+
+                    let ci = parse-combine-classes(file-path, toks);
+                    toks = ci.first;
+
+                    EnumDecl {
+                        members,
+                        ci.second
+                    }
+                };
+
+                out = out.push(Decl {
                     name,
                     attribs,
                     is_ref,
@@ -405,8 +584,4 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
         }
     };
     out
-);
-
-let parse(file-path: String, toks: List<CString>): Vector<Decl> = (
-    parse(file-path, empty-ident(), false, false, toks)
 );

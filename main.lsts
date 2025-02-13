@@ -1,7 +1,11 @@
 
+let parse-file(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool): Vector<Decl> = (
+    let content = read-file(untern(file-path));
+    let tks = tokenize-string(file-path, intern(content));
+    parse(file-path, scope, is_ref, was_included, tks)
+);
+
 let main(): Nil = (
     let path = "vxdef/test.vxdef";
-
-    let tks = tokenize-string(path, intern(read-file(untern(path))));
-    let decls = parse(path, tks);
+    let decls = parse-file(path, empty-ident(), false, false);
 );

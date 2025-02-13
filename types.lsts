@@ -28,10 +28,10 @@ type MemberSpec = MemberSpec {
     default: Maybe<Expr[]>
 };
 
-type DeclVal = ClassDecl { virtual: U8, extensible: U8, members: Vector<MemberSpec[]>, parent: Maybe<Tuple<Vector<CString>, ArgList[]>> }
-             | EnumDecl  { members: HashtableEq<CString, ArgList[]>, combine_classes: Vector<Vector<CString>> }
-             | ClassExtension { members: Vector<MemberSpec[]>, parent: Vector<CString> }
-             | EnumExtension  { members: HashtableEq<CString, ArgList>, parent_enum: Vector<CString>, combine_classes: Vector<Vector<CString>> }
+type DeclVal = ClassDecl   { virtual: U8, extensible: U8, members: Vector<MemberSpec[]>, parent: Maybe<Tuple<Vector<CString>, ArgList[]>> }
+             | EnumDecl    { members: HashtableEq<CString, ArgList[]>, combine_classes: Vector<Vector<CString>> }
+             | ClassExtDecl{ members: Vector<MemberSpec[]>, parent: Vector<CString> }
+             | EnumExtDecl { members: HashtableEq<CString, ArgList[]>, parent_enum: Vector<CString>, combine_classes: Vector<Vector<CString>> }
              ;
 
 type Decl = Decl {
