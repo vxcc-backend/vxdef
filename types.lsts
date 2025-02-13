@@ -37,6 +37,9 @@ type DeclVal = ClassDecl { virtual: U8, extensible: U8, members: Vector<MemberSp
 type Decl = Decl {
     name: Vector<CString>,
 
+    # additional attributes
+    attribs: HashtableEq<Vector<CString>, ArgList>,
+
     # don't generate C code of this decl if is_ref is true
     is_ref: U64,
 
