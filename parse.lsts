@@ -1,0 +1,362 @@
+
+let empty-ident(): Ident = (
+    mk-vector(type(CString),0)
+);
+
+let parse-ident(toks: List<CString>): Tuple<List<CString>, Ident> = (
+    let out = mk-vector(type(CString), 4);
+
+    out.push(head(toks));
+    toks = tail(toks);
+
+    while head(toks) == "::" {
+        toks = tail(toks);
+        out.push(head(toks));
+        toks = tail(toks);
+    };
+
+    Tuple { toks, out }
+);
+
+let parse-type(file-path: String, toks: List<CString>): Tuple<List<CString>, TypeSpec> = (
+    let out = match intern(head(toks)) {
+        "?" => (
+            toks = tail(toks);
+            let x = parse-type(file-path, toks);
+            toks = x.first;
+            match x.second {
+                OptionalTypeSpec {} => (
+                    fail("Can't have optional of optional (in file \{file-path})");
+                );
+                rest => ();
+            };
+            OptionalTypeSpec { close(x.second) }
+        );
+
+        "[" => (
+            toks = tail(toks);
+
+            let x = parse-type(file-path, toks);
+            toks = x.first;
+
+            expect(file-path, head(toks), "]");
+            toks = tail(toks);
+
+            ArrayTypeSpec { close(x.second) }
+        );
+
+        rest => (
+            let x = parse-ident(toks);
+            toks = x.first;
+            IdentTypeSpec { x.second }
+        );
+    };
+
+    while head(toks) == "*" {
+        toks = tail(toks);
+        out = PtrTypeSpec { close(out) };
+    };
+
+    Tuple { toks, out }
+);
+
+let parse-member-spec(file-path: String, toks: List<CString>): Tuple<List<CString>, MemberSpec> = (
+    let v0 = parse-type(file-path, toks);
+    toks = v0.first;
+    let typ = v0.second;
+
+    let name = head(toks);
+    toks = tail(toks);
+
+    let default = None :: Maybe<Expr[]>;
+    if head(toks) == "=" {
+        toks = tail(toks);
+
+        let x = parse-expr(file-path, toks);
+        toks = x.first;
+
+        default = Some { close(x.second) };
+    };
+
+    let ms = MemberSpec { close(typ), name, default };
+    Tuple { toks, ms }
+);
+
+# parses: (int a, int b, int c = 2, int d)
+let parse-members(file-path: String, toks: List<CString>): Tuple<List<CString>, Vector<MemberSpec[]>> = (
+    let out = mk-vector(type(MemberSpec[]), 4);
+
+    expect(file-path, head(toks), "(");
+    toks = tail(toks);
+
+    let loop = true;
+    while loop {
+        if head(toks) == ")" {
+            loop = false;
+        } else {
+            let ms = parse-member-spec(file-path, toks);
+            toks = ms.first;
+            out.push(close(ms.second));
+
+            if head(toks) != "," {
+                loop = false;
+            } else {
+                toks = tail(toks);
+            };
+        };
+    };
+
+    expect(file-path, head(toks), ")");
+    toks = tail(toks);
+
+    Tuple { toks, out }
+);
+
+let expect(file-path: String, actual: CString, expected: t): Nil = (
+    if actual != expected {
+        fail("Expected \{expected}, but got \{actual} (In File: \{file-path})");
+    };
+);
+
+let parse-expr-atom(file-path: String, toks: List<CString>): Tuple<List<CString>, Expr> = (
+    let e = match intern(head(toks)) {
+        "\"".. rest => (
+            let v = head(toks);
+            toks = tail(toks);
+            StrExpr { v }
+        );
+
+        (num=r/^[0-9]+/).. rest => (
+            let v = head(toks);
+            toks = tail(toks);
+            NumExpr { to-i64(v) }
+        );
+
+        "null" => (
+            toks = tail(toks);
+            NullExpr {}
+        );
+
+        "[" => (
+            toks = tail(toks);
+
+            let arr = mk-vector(type(Expr[]), 4);
+
+            let loop = true;
+            while loop {
+                if head(toks) == "]" {
+                    loop = false;
+                } else {
+                    let ex = parse-expr(file-path, toks);
+                    toks = ex.first;
+                    arr.push(close(ex.second));
+
+                    if head(toks) != "," {
+                        loop = false;
+                    } else {
+                        toks = tail(toks);
+                    };
+                };
+            };
+
+            expect(file-path, head(toks), "]");
+            toks = tail(toks);
+
+            ArrExpr { arr }
+        );
+
+        (id=r/^[a-zA-Z0-9_]+/).. rest => (
+            let i = parse-ident(toks);
+            toks = i.first;
+
+            IdentExpr { i.second }
+        );
+
+        rest => ( fail("Unexpected Token. Expected expression atom (in File \{file-path}): \{head(toks)}"); );
+    };
+    Tuple { toks, e }
+);
+
+let parse-expr(file-path: String, toks: List<CString>): Tuple<List<CString>, Expr> = (
+    let v0 = parse-expr-atom(file-path, toks);
+    toks = v0.first;
+    let val = v0.second;
+
+    # parse left associative operators
+    let loop = true;
+    while loop {
+        match intern(head(toks)) {
+            "." => (
+                toks = tail(toks);
+                let name = head(toks);
+                toks = tail(toks);
+                val = MemberExpr { close(val), name };
+            );
+
+            "(" => (
+                let a = parse-call-args(file-path, toks);
+                toks = a.first;
+                val = CallExpr { close(val), a.second };
+            );
+
+            "[" => (
+                toks = tail(toks);
+
+                let e = parse-expr(file-path, toks);
+                toks = e.first;
+
+                expect(file-path, head(toks), "]");
+                toks = tail(toks);
+
+                val = IdxExpr { close(val), close(e.second) };
+            );
+
+            rest => (
+                loop = false;
+            );
+        };
+    };
+
+    val
+);
+
+# parses: (1,2,3,4,name="hi",val=9)
+let parse-call-args(file-path: String, toks: List<CString>): Tuple<List<CString>, ArgList> = (
+    expect(file-path, head(toks), "(");
+    toks = tail(toks);
+
+    let out = ArgList {
+        mk-vector(type(Expr[]), 4),
+        HashtableEqEOF :: HashtableEq<CString, Expr[]>
+    };
+
+    let allows_positional = true;
+    let loop = true;
+    while loop {
+        if head(toks) == ")" {
+            loop = false;
+        } else {
+            if head(tail(toks)) == "=" {
+                allows_positional = false;
+
+                let name = head(toks);
+                toks = tail(tail(toks));
+
+                let e = parse-expr(file-path, toks);
+                toks = e.first;
+
+                out.named[name] = close(e.second);
+            } else {
+                if not(allows_positional) {
+                    fail("You can't use positional arguments after having a named argument! (In File: \{file-path})");
+                };
+
+                let e = parse-expr(file-path, toks);
+                toks = e.first;
+                out.positional.push(close(e.second));
+            };
+
+            if head(toks) != "," {
+                loop = false;
+            } else {
+                toks = tail(toks);
+            };
+        };
+    };
+
+    expect(file-path, head(toks), ")");
+    toks = tail(toks);
+
+    Tuple { toks, out }
+);
+
+let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, toks: List<CString>): Vector<Decl> = (
+    let out = mk-vector(type(Decl), 32);
+
+    let pfx_virt = false :: U32;
+    let pfx_extensible = false :: U32;
+
+    while toks.length() > 0 {
+        match intern(head(toks)) {
+            "included_only" => (
+                if not(was_included) {
+                    fail("file \{file-path} can't be compiled directly because it is included_only");
+                };
+
+                toks = tail(toks);
+            );
+
+            "scope" => (
+                if pfx_extensible || pfx_virt {
+                    fail("scopes can't be virtual or extensible (in File \{file-path})");
+                };
+
+                toks = tail(toks);
+                let i = parse-ident(toks);
+                toks = i.first;
+                scope = i.second;
+            );
+
+            "extensible" => (
+                if pfx_extensible {
+                    fail("Don't use extensible keyword twice (in File \{file-path})");
+                };
+
+                toks = tail(toks);
+                pfx_extensible = true;
+            );
+
+            "virt" => (
+                if pfx_virt {
+                    fail("Don't use virt keyword twice (in File \{file-path})");
+                };
+
+                toks = tail(toks);
+                pfx_virt = true;
+            );
+
+            "class" => (
+                toks = tail(toks);
+
+                let i = parse-ident(toks);
+                toks = i.first;
+                let name = (scope :: Ident) + (i.second :: Ident);
+
+                let m = parse-members(file-path, toks);
+                toks = m.first;
+                let members = m.second;
+
+                let parent = None :: Maybe<Tuple<Ident, ArgList[]>>;
+                if head(toks) == ":" {
+                    toks = tail(toks);
+
+                    let pi = parse-ident(toks);
+                    toks = pi.first;
+
+                    let a = parse-call-args(file-path, toks);
+                    toks = a.first;
+
+                    parent = Some { Tuple { pi.second, close(a.second) } };
+                };
+
+                let decl = ClassDecl {
+                    pfx_virt as U8,
+                    pfx_extensible as U8,
+                    members,
+                    parent
+                };
+                out.push(decl :: Decl);
+
+                pfx_virt = false;
+                pfx_extensible = false;
+            );
+
+            rest => ( fail("Unexpected Token (in File \{file-path}): \{head(toks)}"); );
+        }
+    };
+    out
+);
+
+let parse(file-path: String, toks: List<CString>): Vector<Decl> = (
+    parse(file-path, empty-ident(), false, false, toks)
+);

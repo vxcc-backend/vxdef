@@ -1,0 +1,7 @@
+
+let main(): Nil = (
+    let path = "vxdef/test.vxdef";
+
+    let tks = tokenize-string(path, intern(read-file(untern(path))));
+    let decls = parse(path, tks);
+);

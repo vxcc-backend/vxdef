@@ -1,0 +1,44 @@
+
+type alias Ident = Vector<CString>;
+
+type ArgList = ArgList {
+    positional: Vector<Expr[]>,
+    named: HashtableEq<CString, Expr[]>
+};
+
+type Expr = NumExpr { num: I64 }
+          | NullExpr
+          | IdentExpr { ident: Vector<CString> }
+          | StrExpr { str: CString }
+          | ArrExpr { arr: Vector<Expr[]> }
+          | MemberExpr { left: Expr[], member: CString }
+          | CallExpr { fn: Expr[], args: ArgList }
+          | IdxExpr { arr: Expr[], idx: Expr[] }
+          ;
+
+type TypeSpec = OptionalTypeSpec { of: TypeSpec[] }
+              | IdentTypeSpec { id: Vector<CString> }
+              | ArrayTypeSpec { of: TypeSpec[] }
+              | PtrTypeSpec { of: TypeSpec[] }
+              ;
+
+type MemberSpec = MemberSpec {
+    type: TypeSpec[],
+    name: CString,
+    default: Maybe<Expr[]>
+};
+
+type DeclVal = ClassDecl { virtual: U8, extensible: U8, members: Vector<MemberSpec[]>, parent: Maybe<Tuple<Vector<CString>, ArgList[]>> }
+             | EnumDecl  { members: HashtableEq<CString, ArgList[]>, combine_classes: Vector<Vector<CString>> }
+             | ClassExtension { members: Vector<MemberSpec[]>, parent: Vector<CString> }
+             | EnumExtension  { members: HashtableEq<CString, ArgList>, parent_enum: Vector<CString>, combine_classes: Vector<Vector<CString>> }
+             ;
+
+type Decl = Decl {
+    name: Vector<CString>,
+
+    # don't generate C code of this decl if is_ref is true
+    is_ref: U64,
+
+    val: DeclVal
+};
