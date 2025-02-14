@@ -411,6 +411,10 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "include" => (
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                    fail("\"include_ref\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
+                };
+
                 toks = tail(toks);
 
                 let stri = str-tok-inner(head(toks));
@@ -425,6 +429,10 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "include_ref" => (
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                    fail("\"include_ref\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
+                };
+
                 toks = tail(toks);
 
                 let stri = str-tok-inner(head(toks));
@@ -439,6 +447,10 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "included_only" => (
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                    fail("\"included_only\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
+                };
+
                 if not(was_included) {
                     fail("file \{file-path} can't be compiled directly because it is included_only");
                 };
@@ -447,8 +459,8 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "scope" => (
-                if pfx_extensible || pfx_virt || pfx_extension {
-                    fail("scopes can't be virtual, extensible or extension (in File \{file-path})");
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                    fail("scopes can't be virtual, extensible, extension or have attributes (in File \{file-path})");
                 };
 
                 toks = tail(toks);
@@ -609,6 +621,120 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 pfx_virt = false;
                 pfx_extensible = false;
                 pfx_extension = false;
+                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+            );
+
+            "let" => (
+                toks = tail(toks);
+
+                let i = parse-ident(toks);
+                toks = i.first;
+                let name = ((scope :: Ident) + (i.second :: Ident)) :: Ident;
+
+                expect(file-path, head(toks), "=");
+                toks = tail(toks);
+
+                if pfx_virt || pfx_extensible || pfx_extension {
+                    fail("You can't have a virtual, extensible or extension \"let\" (In file \{file-path})");
+                };
+
+                let expr = parse-expr(file-path, toks);
+                toks = expr.first;
+
+                let decl = ConstDecl { close(expr.second) };
+
+                expect(file-path, head(toks), ";");
+                toks = tail(toks);
+
+                out = out.push(Decl {
+                    name,
+                    attribs,
+                    is_ref,
+                    decl
+                });
+
+                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+            );
+
+            "lut" => (
+                if pfx_virt || pfx_extensible || pfx_extension {
+                    fail("You can't have a virtual, extensible or extension look-up table (In file \{file-path})");
+                };
+
+                toks = tail(toks);
+
+                let i = parse-ident(toks);
+                toks = i.first;
+                let name = ((scope :: Ident) + (i.second :: Ident)) :: Ident;
+
+                expect(file-path, head(toks), ":");
+                toks = tail(toks);
+
+                let from = parse-type(file-path, toks);
+                toks = from.first;
+
+                expect(file-path, head(toks), "=>");
+                toks = tail(toks);
+
+                let to = parse-type(file-path, toks);
+                toks = to.first;
+
+                expect(file-path, head(toks), "{");
+                toks = tail(toks);
+
+                let decl = LutDecl {
+                    close(from.second),
+                    close(to.second),
+                    mk-vector(type(Tuple<Expr[], Expr[]>), 8),
+                    (None :: Maybe<Expr[]>)
+                };
+
+                let had_comma = true;
+                while head(toks) != "}" && had_comma {
+                    if head(toks) == "_" {
+                        toks = tail(toks);
+
+                        expect(file-path, head(toks), "=>");
+                        toks = tail(toks);
+
+                        let rhs = parse-expr(file-path, toks);
+                        toks = rhs.first;
+
+                        if decl.default.is-some() {
+                            fail("you can only have one default case in a look-up table (In File \{file-path})");
+                        };
+
+                        decl.default = Some { rhs };
+                    } else {
+                        let lhs = parse-expr(file-path, toks);
+                        toks = lhs.first;
+
+                        expect(file-path, head(toks), "=>");
+                        toks = tail(toks);
+
+                        let rhs = parse-expr(file-path, toks);
+                        toks = rhs.first;
+
+                        decl.cases.push(Tuple { lhs, rhs });
+                    };
+
+                    if head(toks) == "," {
+                        toks = tail(toks);
+                    } else {
+                        had_comma = false;
+                    };
+                };
+
+                expect(file-path, head(toks), "}");
+                toks = tail(toks);
+
+                out = out.push(Decl {
+                    name,
+                    attribs,
+                    is_ref,
+                    decl
+                });
+
                 attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
             );
 

@@ -8,6 +8,7 @@ let tokenize-string(file-path: String, text: String): List<CString> = (
       "\t".. rest => text = rest;
       "\n".. rest => text = rest;
 
+      "=>".. rest => (tokens = cons(text[:"=>".length], tokens); text = rest;);
       "::".. rest => (tokens = cons(text[:"::".length], tokens); text = rest;);
       "...".. rest => (tokens = cons(text[:"...".length], tokens); text = rest;);
       "<<=".. rest => (tokens = cons(text[:"<<=".length], tokens); text = rest;);

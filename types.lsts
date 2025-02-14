@@ -34,6 +34,8 @@ type DeclVal = ClassDecl   { virtual: U8, extensible: U8, members: Vector<Member
              | EnumDecl    { members: HashtableEq<CString, ArgList[]>, combine_classes: Vector<Vector<CString>> }
              | ClassExtDecl{ members: Vector<MemberSpec[]>, parent: Vector<CString> }
              | EnumExtDecl { members: HashtableEq<CString, ArgList[]>, parent_enum: Vector<CString>, combine_classes: Vector<Vector<CString>> }
+             | ConstDecl   { value: Expr[] }
+             | LutDecl     { from: TypeSpec[], to: TypeSpec[], cases: Vector<Tuple<Expr[], Expr[]>>, default: Maybe<Expr[]> }
              ;
 
 type Decl = Decl {
