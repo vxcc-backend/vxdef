@@ -682,12 +682,8 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 expect(file-path, head(toks), "{");
                 toks = tail(toks);
 
-                let decl = LutDecl {
-                    close(from.second),
-                    close(to.second),
-                    mk-vector(type(Tuple<Expr[], Expr[]>), 8),
-                    (None :: Maybe<Expr[]>)
-                };
+                let default = None :: Maybe<Expr<[]>>;
+                let cases = mk-vector(type(Tuple<Expr[], Expr[]>), 8);
 
                 let had_comma = true;
                 while head(toks) != "}" && had_comma {
@@ -700,11 +696,11 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                         let rhs = parse-expr(file-path, toks);
                         toks = rhs.first;
 
-                        if decl.default.is-some() {
+                        if default.is-some() {
                             fail("you can only have one default case in a look-up table (In File \{file-path})");
                         };
 
-                        decl.default = Some { rhs };
+                        default = Some { rhs };
                     } else {
                         let lhs = parse-expr(file-path, toks);
                         toks = lhs.first;
@@ -715,7 +711,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                         let rhs = parse-expr(file-path, toks);
                         toks = rhs.first;
 
-                        decl.cases.push(Tuple { lhs, rhs });
+                        cases = cases.push(Tuple { lhs, rhs });
                     };
 
                     if head(toks) == "," {
@@ -727,6 +723,13 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
 
                 expect(file-path, head(toks), "}");
                 toks = tail(toks);
+
+                let decl = LutDecl {
+                    close(from.second),
+                    close(to.second),
+                    cases,
+                    default
+                };
 
                 out = out.push(Decl {
                     name,
