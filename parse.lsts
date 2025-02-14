@@ -260,7 +260,7 @@ let parse-expr(file-path: String, toks: List<CString>): Tuple<List<CString>, Exp
 let empty-arglist(): ArgList = (
     ArgList {
         mk-vector(type(Expr[]), 4),
-        HashtableEqEOF :: HashtableEq<CString, Expr[]>
+        {} :: HashtableEq<CString, Expr[]>
     }
 );
 
@@ -333,7 +333,7 @@ let parse-combine-classes(file-path: String, toks: List<CString>): Tuple<List<CS
 
 # parses: (HUMAN(true),ROBOT(false))
 let parse-enum-members(file-path: String, toks: List<CString>): Tuple<List<CString>, HashtableEq<CString, ArgList[]>> = (
-    let out = HashtableEqEOF :: HashtableEq<CString, ArgList[]>;
+    let out = {} :: HashtableEq<CString, ArgList[]>;
 
     expect(file-path, head(toks), "(");
     toks = tail(toks);
@@ -384,7 +384,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
     let pfx_virt = false :: U32;
     let pfx_extensible = false :: U32;
     let pfx_extension = false :: U32;
-    let attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+    let attribs = {} :: HashtableEq<Vector<CString>, ArgList>;
 
     while toks.length() > 0 {
         match intern(head(toks)) {
@@ -411,7 +411,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "include" => (
-                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != {}) {
                     fail("\"include_ref\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
                 };
 
@@ -429,7 +429,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "include_ref" => (
-                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != {}) {
                     fail("\"include_ref\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
                 };
 
@@ -447,7 +447,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "included_only" => (
-                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != {}) {
                     fail("\"included_only\" can't be virtual, extensible, extension or have attributes (in File \{file-path})");
                 };
 
@@ -459,7 +459,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
             );
 
             "scope" => (
-                if pfx_extensible || pfx_virt || pfx_extension || (attribs != HashtableEqEOF) {
+                if pfx_extensible || pfx_virt || pfx_extension || (attribs != {}) {
                     fail("scopes can't be virtual, extensible, extension or have attributes (in File \{file-path})");
                 };
 
@@ -558,7 +558,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 pfx_virt = false;
                 pfx_extensible = false;
                 pfx_extension = false;
-                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+                attribs = {} :: HashtableEq<Vector<CString>, ArgList>;
             );
 
             "enum" => (
@@ -621,7 +621,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 pfx_virt = false;
                 pfx_extensible = false;
                 pfx_extension = false;
-                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+                attribs = {} :: HashtableEq<Vector<CString>, ArgList>;
             );
 
             "let" => (
@@ -653,7 +653,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                     decl
                 });
 
-                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+                attribs = {} :: HashtableEq<Vector<CString>, ArgList>;
             );
 
             "lut" => (
@@ -738,7 +738,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                     decl
                 });
 
-                attribs = HashtableEqEOF :: HashtableEq<Vector<CString>, ArgList>;
+                attribs = {} :: HashtableEq<Vector<CString>, ArgList>;
             );
 
             rest => ( fail("Unexpected Token (in File \{file-path}): \{head(toks)}"); );
