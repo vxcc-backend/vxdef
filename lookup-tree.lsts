@@ -1,0 +1,73 @@
+
+type LookupTree<k,v> = LookupTreeEOF
+                     | LookupTreeVal  { value: v }
+                     | LookupTreeHash { entries: HashtableEq<k, LookupTree<k,v>[]> }
+                     ;
+
+let .find-unsafe(self: LookupTree<k,v>, key: Vector<k>): Maybe<v> = (
+    match self {
+        LookupTreeEOF {} => (
+            None :: Maybe<v>
+        );
+
+        LookupTreeVal {value=value} => (
+            if key.length() == 0 {
+                Some { value }
+            } else {
+                None :: Maybe<v>
+            }
+        );
+
+        LookupTreeHash { entries=entries } => (
+            if key.length() == 0 {
+                None :: Maybe<v>
+            } else {
+                if entries.has(key[0]) {
+                    let nk = key[0];
+                    key = key.remove-front(1);
+                    open(entries.get(nk, Nil as v)).find-unsafe(key);
+                } else {
+                    None :: Maybe<v>
+                }
+            }
+        );
+    }
+);
+
+let .find(self: LookupTree<k,v>, key: Vector<k>): Maybe<v> = (
+    let new = mk-vector(type(k), key.length());
+    for x in key.unsafe-iter() {
+        new = new.push(x);
+    };
+    self.find-unsafe(new)
+);
+
+let .put(self: LookupTree<k,v>, key: Vector<k>, val: v): LookupTree<k, v> = (
+    if key.length() == 0 {
+        match self {
+            LookupTreeEOF {} => (
+                LookupTreeVal { val }
+            );
+
+            any => ( fail("can't put value (with empty key) into tree node that already has children") );
+        }
+    } else {
+        let nk = key[0];
+        key = key.remove-front(1);
+        let inner = (LookupTreeEOF :: LookupTree<k,v>).put(key, val);
+        match self {
+            LookupTreeEOF {} => (
+                let dict = { nk: close(inner) } :: HashtableEq<k,LookupTree<k,v>[]>;
+                (LookupTreeHash { dict })
+            );
+
+            LookupTreeVal {value=value} => (
+                fail("can't have namespace with same name as entry in the same node")
+            );
+
+            LookupTreeHash { entries=entries } => (
+                self.bind(nk, close(inner))
+            );
+        }
+    }
+);

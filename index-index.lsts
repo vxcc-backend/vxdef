@@ -1,8 +1,10 @@
 
 import LIB/default.lsts;
 
+import vxdef/lookup-tree.lsts;
 import vxdef/paths.lsts;
 import vxdef/lex.lsts;
 import vxdef/types.lsts;
 import vxdef/parse.lsts;
+import vxdef/sema.lsts;
 import vxdef/main.lsts;

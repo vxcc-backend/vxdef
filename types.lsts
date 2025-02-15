@@ -41,6 +41,9 @@ type DeclVal = ClassDecl   { virtual: U8, extensible: U8, members: Vector<Member
 type Decl = Decl {
     name: Vector<CString>,
 
+    # scope is already included in name! only use this for type resolving
+    scope: Vector<CString>,
+
     # additional attributes
     attribs: HashtableEq<Vector<CString>, ArgList>,
 
@@ -48,4 +51,9 @@ type Decl = Decl {
     is_ref: U64,
 
     val: DeclVal
+};
+
+type CU = CU {
+    decls:  Vector<Decl[]>,
+    lookup: LookupTree<CString, Decl[]>,
 };

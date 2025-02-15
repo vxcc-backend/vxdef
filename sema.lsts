@@ -1,0 +1,44 @@
+
+let create-cu(decls: Vector<Decl>): CU = (
+    let new-decls = mk-vector(type(Decl[]), decls.length());
+    let tree = LookupTreeEOF :: LookupTree<CString, Decl[]>;
+
+    for decl in decls.unsafe-iter() {
+        let ptr = close(decl);
+        new-decls = new-decls.push(ptr);
+        tree = tree.put(decl.name, ptr);
+    };
+
+    CU { new-decls, tree }
+);
+
+let resolve-idents(cu: CU): Nil = (
+    for decl in cu.decls.unsafe-iter() {
+        decl[0] = resolve-idents(cu, open(decl));
+    };
+);
+
+let resolve-ident(cu: CU, scope: Vector<CString>, ident: Vector<CString>): Vector<CString> = (
+    let whole = (scope :: Vector<CString>) + (ident :: Vector<CString>);
+    let val = cu.lookup.find(whole);
+    match val {
+        None {} => (
+            if scope.length() == 0 {
+                let idents = ident.join("::");
+                fail("could not resolve \{idents}");
+            } else {
+                scope = scope.remove-front(1);
+                resolve-ident(cu, scope, ident)
+            }
+        );
+
+        Some {} => (
+            whole
+        );
+    }
+);
+
+let resolve-idents(cu: CU, decl: Decl): Decl = (
+    # TODO
+    decl
+);

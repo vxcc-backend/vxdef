@@ -682,7 +682,7 @@ let parse(file-path: String, scope: Ident, is_ref: Bool, was_included: Bool, tok
                 expect(file-path, head(toks), "{");
                 toks = tail(toks);
 
-                let default = None :: Maybe<Expr<[]>>;
+                let default = (None {}) :: Maybe<Expr[]>;
                 let cases = mk-vector(type(Tuple<Expr[], Expr[]>), 8);
 
                 let had_comma = true;
