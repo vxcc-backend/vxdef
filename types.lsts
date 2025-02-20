@@ -6,6 +6,13 @@ type ArgList = ArgList {
     named: HashtableEq<CString, Expr[]>
 };
 
+let empty-arglist(): ArgList = (
+    ArgList {
+        mk-vector(type(Expr[]), 4),
+        {} :: HashtableEq<CString, Expr[]>
+    }
+);
+
 type Expr = NumExpr { num: I64 }
           | NullExpr
           | IdentExpr { ident: Vector<CString> }

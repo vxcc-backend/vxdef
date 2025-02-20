@@ -257,13 +257,6 @@ let parse-expr(file-path: String, toks: List<CString>): Tuple<List<CString>, Exp
     Tuple { toks, val }
 );
 
-let empty-arglist(): ArgList = (
-    ArgList {
-        mk-vector(type(Expr[]), 4),
-        {} :: HashtableEq<CString, Expr[]>
-    }
-);
-
 # parses: (1,2,3,4,name="hi",val=9)
 let parse-call-args(file-path: String, toks: List<CString>): Tuple<List<CString>, ArgList> = (
     expect(file-path, head(toks), "(");

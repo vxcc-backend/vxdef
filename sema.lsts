@@ -38,7 +38,205 @@ let resolve-ident(cu: CU, scope: Vector<CString>, ident: Vector<CString>): Vecto
     }
 );
 
+let resolve-idents(cu: CU, scope: Vector<CString>, expr: Expr): Expr = (
+    match expr {
+        NumExpr  {} => ( expr );
+        NullExpr {} => ( expr );
+        StrExpr  {} => ( expr );
+        CurrElemRefExpr {} => ( expr );
+
+        IdentExpr { ident=ident } => (
+            ident = resolve-ident(cu, scope, ident);
+            IdentExpr { ident }
+        );
+
+        ArrExpr { arr=arr } => (
+            for iv in arr.unsafe-iter().enumerate() {
+                let e = resolve-idents(cu, scope, open(iv.second));
+                arr[iv.first] = close(e);
+            };
+            ArrExpr { arr }
+        );
+
+        MemberExpr { left=left, member=member } => (
+            MemberExpr {
+                close(resolve-idents(cu, scope, open(left))),
+                member
+            }
+        );
+
+        CallExpr { fn=fn, args=args } => (
+            MemberExpr {
+                close(resolve-idents(cu, scope, open(fn))),
+                resolve-idents(cu, scope, args)
+            }
+        );
+
+        IdxExpr  { arr=arr, idx=idx } => (
+            IdxExpr {
+                close(resolve-idents(cu, scope, open(arr))),
+                close(resolve-idents(cu, scope, open(idx)))
+            }
+        );
+
+        EachExpr { arr=arr, each=each } => (
+            EachExpr {
+                close(resolve-idents(cu, scope, open(arr))),
+                close(resolve-idents(cu, scope, open(each)))
+            }
+        );
+    };
+);
+
+let resolve-idents(cu: CU, scope: Vector<CString>, ts: TypeSpec): TypeSpec = (
+    match ts {
+        OptionalTypeSpec { of=of } => (
+            let v = resolve-idents(cu, scope, open(of));
+            OptionalTypeSpec { close(v) }
+        );
+
+        IdentTypeSpec { of=of } => (
+            of = resolve-ident(cu, scope, of);
+            IdentTypeSpec { of }
+        );
+
+        ArrayTypeSpec { of=of } => (
+            let v = resolve-idents(cu, scope, open(of));
+            ArrayTypeSpec { close(v) }
+        );
+
+        PtrTypeSpec { of=of } => (
+            let v = resolve-idents(cu, scope, open(of));
+            PtrTypeSpec { close(v) }
+        );
+    }
+);
+
+let resolve-idents(cu: CU, scope: Vector<CString>, v: MemberSpec): MemberSpec = (
+    let def = match v.default {
+        None {} => ( None {} :: Maybe<Expr[]> );
+        Some { content=content } => ( close(resolve-idents(cu, scope, open(content))) );
+    };
+    MemberSpec { resolve-idents(cu, scope, v.type), v.name, def }
+);
+
+let resolve-idents(cu: CU, scope: Vector<CString>, args: ArgList): ArgList = (
+    let out = empty-arglist();
+
+    for v in args.positional.unsafe-iter() {
+        let vv = resolve-idents(cu, scope, open(v));
+        out.positional = out.positional.push(close(vv));
+    };
+
+    for kv in args.named.unsafe-iter() {
+        let expr = resolve-idents(cu, scope, open(kv.second));
+        kv = Tuple { kv.first, close(expr) };
+        out.named = out.named.bind(kv);
+    };
+
+    out
+);
+
 let resolve-idents(cu: CU, decl: Decl): Decl = (
-    # TODO
-    decl
+    match decl.val {
+        ClassDecl { virtual=virtual, extensible=extensible, members=members, parent=parent } => (
+            for iv in members.unsafe-iter().enumerate() {
+                let i = iv.first;
+                let v = open(iv.second);
+                members[i] = close(resolve-idents(cu, v));
+            };
+
+            parent = match parent {
+                None {} => ( None :: Maybe<Tuple<Vector<CString>,ArgList[]>> );
+
+                Some { content=content } => (
+                    let id = resolve-ident(cu, decl.scope, content.first);
+                    let args = resolve-idents(cu, decl.scope, open(content.second));
+                    Some { (Tuple { id, close(args) }) }
+                );
+            };
+
+            ClassDecl { virtual, extensible, members, parent }
+        );
+
+        EnumDecl { members=members, combine_classes=combine_classes } => (
+            let new-members = {} :: HashtableEq<CString, ArgList[]>;
+            for member in members.unsafe-iter() {
+                let name = member.first;
+                let args = open(member.second);
+                args = resolve-idents(cu, decl.scope, args);
+                new-members = new-members.bind(name, close(args));
+            };
+
+            for iv in combine_classes.unsafe-iter().enumerate() {
+                let i = iv.first;
+                let name = resolve-ident(cu, decl.scope, iv.second);
+                combine_classes[i] = name;
+            };
+
+            EnumDecl { new-members, combine_classes }
+        );
+
+        ClassExtDecl { members=members, parent=parent } => (
+            for iv in members.unsafe-iter().enumerate() {
+                let v = open(iv.second);
+                v = resolve-idents(cu, decl.scope, v);
+                members[iv.first] = close(v);
+            };
+
+            parent = resolve-ident(cu, decl.scope, parent);
+
+            ClassExtDecl { members, parent }
+        );
+
+        EnumExtDecl { members, parent_enum, combine_classes } => (
+            let new-members = {} :: HashtableEq<CString, ArgList[]>;
+            for member in members.unsafe-iter() {
+                let name = member.first;
+                let args = open(member.second);
+                args = resolve-idents(cu, decl.scope, args);
+                new-members = new-members.bind(name, close(args));
+            };
+
+            for iv in combine_classes.unsafe-iter().enumerate() {
+                let i = iv.first;
+                let name = resolve-ident(cu, decl.scope, iv.second);
+                combine_classes[i] = name;
+            };
+
+            parent_enum = resolve-ident(cu, decl.scope, parent_enum);
+
+            EnumExtDecl { members, parent_enum, combine_classes }
+        );
+
+        ConstDecl { value } => (
+            let v = open(value);
+            v = resolve-idents(cu, decl.scope, v);
+            ConstDecl { close(v) }
+        );
+
+        LutDecl { fromp, top, cases, default } => (
+            let from = resolve-idents(cu, decl.scope, open(fromp));
+            let to = resolve-idents(cu, decl.scope, open(top));
+
+            let iv in cases.unsafe-iter().enumerate() {
+                (let l, let r) = iv.second;
+                cases[iv.first] = Tuple {
+                    close(resolve-idents(cu, decl.scope, open(l))),
+                    close(resolve-idents(cu, decl.scope, open(r)))
+                };
+            };
+
+            match default {
+                None {} => ();
+
+                Some { content=content } => (
+                    let v = resolve-idents(cu, decl.scope, open(content));
+                    default = Some { close(v) };
+                );
+            };
+
+            LutDecl { from, to, cases, default }
+        );
+    }
 );
